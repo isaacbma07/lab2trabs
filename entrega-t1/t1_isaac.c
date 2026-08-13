@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <time.h>
 
-#define MAX_POSICOES 13
+#define POSICOES_ATAQUE 10
 #define NUM_ESCUDOS 3
 
 typedef struct timespec crono;
@@ -28,8 +28,9 @@ typedef struct {
     int inimigos_inativos;
     int tiros;
     crono ultimo_movimento;
-    char ataques[MAX_POSICOES];
-    int num_posicoes;
+    char ataques[POSICOES_ATAQUE];
+    int num_ataques;
+    double intervalo;
     char arma;
     char escudos[NUM_ESCUDOS];
 } estado_t;
@@ -54,7 +55,7 @@ void desinicializa_tela()
 
 void inicializa_ataques(estado_t *est)
 {
-    for (int i = 0; i < MAX_POSICOES; i++) {
+    for (int i = 0; i < POSICOES_ATAQUE; i++) {
         est->ataques[i] = ' ';
     }
 }
@@ -71,17 +72,31 @@ void inicializa_estado(estado_t *est)
     est->terminou_jogo = false;
     est->pontos = 0;
     est->tiros = 30;
-    est->num_posicoes = 13;
+    est->inimigos_inativos = 20;
+    est->num_ataques = POSICOES_ATAQUE;
+    est->intervalo = 2.0;
     est->arma = '0';
     inicializa_ataques(est);
     inicializa_escudos(est);
-    est->ataques[0] = '5';
     crono_inicia(&est->ultimo_movimento);
+}
+
+bool ha_ataque_ativo(estado_t *est)
+{
+    for (int i = 0; i < est->num_ataques; i++) {
+        if (est->ataques[i] != ' ') {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool onda_terminou(estado_t *est)
 {
-    return est->terminou_jogo;
+    if (est->terminou_jogo) {
+        return true;
+    }
+    return est->inimigos_inativos == 0 && !ha_ataque_ativo(est);
 }
 
 char lechar()
@@ -94,16 +109,122 @@ char lechar()
     return 0;
 }
 
+void proxima_arma(estado_t *est)
+{
+    char sequencia[] = "0123456789n";
+    int i = 0;
+    while (sequencia[i] != est->arma) {
+        i++;
+    }
+    i = (i + 1) % 11;
+    est->arma = sequencia[i];
+}
+
+int acha_alvo(estado_t *est)
+{
+    for (int i = 0; i < est->num_ataques; i++) {
+        char tipo = est->ataques[i];
+        if (tipo == est->arma) {
+            return i;
+        }
+        if (est->arma == 'n' && tipo == 'N') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void atira_no_alvo(estado_t *est, int i)
+{
+    if (est->arma == 'n' && est->ataques[i] == 'N') {
+        est->ataques[i] = 'n';
+        return;
+    }
+    int pontos_base = est->num_ataques - i;
+    est->ataques[i] = ' ';
+    est->pontos += (est->arma == 'n') ? pontos_base * 2 : pontos_base;
+}
+
+void atira(estado_t *est)
+{
+    if (est->tiros <= 0) {
+        return;
+    }
+    est->tiros--;
+    int i = acha_alvo(est);
+    if (i != -1) {
+        atira_no_alvo(est, i);
+    }
+}
+
 void processa_teclado(estado_t *est)
 {
     char c = lechar();
     if (c == 27) {
         est->terminou_jogo = true;
+    } else if (c == '\t') {
+        proxima_arma(est);
+    } else if (c == '\r' || c == '\n') {
+        atira(est);
     }
+}
+
+bool deve_mover(estado_t *est)
+{
+    if (crono_parcial(&est->ultimo_movimento) < est->intervalo) {
+        return false;
+    }
+    crono_inicia(&est->ultimo_movimento);
+    return true;
+}
+
+void trata_colisao(estado_t *est)
+{
+    for (int i = NUM_ESCUDOS - 1; i >= 0; i--) {
+        if (est->escudos[i] != ' ') {
+            est->escudos[i] = ' ';
+            return;
+        }
+    }
+    est->terminou_jogo = true;
+}
+
+void move_ataques(estado_t *est)
+{
+    char saiu = est->ataques[0];
+    for (int i = 0; i < est->num_ataques - 1; i++) {
+        est->ataques[i] = est->ataques[i + 1];
+    }
+    est->ataques[est->num_ataques - 1] = ' ';
+    if (saiu != ' ') {
+        trata_colisao(est);
+    }
+}
+
+char sorteia_tipo_ataque()
+{
+    int x = rand() % 11;
+    if (x == 10) {
+        return 'N';
+    }
+    return x + '0';
+}
+
+void nasce_ataque(estado_t *est)
+{
+    est->inimigos_inativos--;
+    est->ataques[est->num_ataques - 1] = sorteia_tipo_ataque();
 }
 
 void processa_tempo(estado_t *est)
 {
+    if (!deve_mover(est)) {
+        return;
+    }
+    move_ataques(est);
+    if (est->inimigos_inativos > 0) {
+        nasce_ataque(est);
+    }
 }
 
 void desenha_escudos(estado_t *est)
@@ -115,7 +236,7 @@ void desenha_escudos(estado_t *est)
 
 void desenha_ataques(estado_t *est)
 {
-    for (int i = 0; i < est->num_posicoes; i++) {
+    for (int i = 0; i < est->num_ataques; i++) {
         printf("%c", est->ataques[i]);
     }
 }
@@ -137,20 +258,48 @@ void joga_onda(estado_t *est)
     }
 }
 
+void aplica_bonus_fim_onda(estado_t *est)
+{
+    est->pontos += est->tiros * 2;
+    for (int i = 0; i < NUM_ESCUDOS; i++) {
+        if (est->escudos[i] != ' ') {
+            est->pontos += 10;
+        }
+    }
+}
+
+void espera_reiniciar(estado_t *est)
+{
+    printf("\nFim da onda! Pontuação atualizada. Aperte 'r' para continuar.\r\n");
+    char c;
+    do {
+        c = lechar();
+        if (c == 27) {
+            est->terminou_jogo = true;
+            return;
+        }
+    } while (c != 'r' && c != 'R');
+}
+
 void joga_partida(estado_t *est)
 {
     while (!est->terminou_jogo) {
         joga_onda(est);
+        if (!est->terminou_jogo) {
+            aplica_bonus_fim_onda(est);
+            espera_reiniciar(est);
+        }
     }
 }
 
 int main()
 {
+    srand(time(NULL));
     estado_t estado;
     inicializa_tela();
     inicializa_estado(&estado);
     while (!estado.terminou_jogo) {
         joga_partida(&estado);
     }
-    desinicializa_tela();
+   desinicializa_tela();
 }
