@@ -24,6 +24,8 @@ double crono_parcial(crono *c)
 
 typedef struct {
     bool terminou_jogo;
+    bool noturno;
+    int numero_onda;
     int pontos;
     int inimigos_inativos;
     int tiros;
@@ -67,18 +69,71 @@ void inicializa_escudos(estado_t *est)
     }
 }
 
+double calcula_intervalo_diurno(int numero_onda)
+{
+    double intervalo = 2.0;
+    for (int i = 1; i < numero_onda; i++) {
+        intervalo *= 0.9;
+    }
+    return intervalo;
+}
+
+bool sorteia_noturno(int numero_onda)
+{
+    int chances[] = {100, 80, 60, 40};
+    int chance_diurna;
+    if (numero_onda <= 4) {
+        chance_diurna = chances[numero_onda - 1];
+    } else {
+        chance_diurna = 20;
+    }
+    return (rand() % 100) >= chance_diurna;
+}
+
+void configura_onda_diurna(estado_t *est)
+{
+    est->noturno = false;
+    est->num_ataques = 10;
+    est->inimigos_inativos = 20;
+    est->arma = '0';
+}
+
+void configura_onda_noturna(estado_t *est)
+{
+    est->noturno = true;
+    est->num_ataques = 5;
+    est->inimigos_inativos = 15;
+    est->arma = '0';
+}
+
+void sorteia_tipo_onda(estado_t *est)
+{
+    if (sorteia_noturno(est->numero_onda)) {
+        configura_onda_noturna(est);
+    } else {
+        configura_onda_diurna(est);
+    }
+}
+
+void inicia_onda(estado_t *est)
+{
+    sorteia_tipo_onda(est);
+    est->intervalo = calcula_intervalo_diurno(est->numero_onda);
+    if (est->noturno) {
+        est->intervalo *= 3;
+    }
+    est->tiros = 30;
+    inicializa_ataques(est);
+    crono_inicia(&est->ultimo_movimento);
+}
+
 void inicializa_estado(estado_t *est)
 {
     est->terminou_jogo = false;
     est->pontos = 0;
-    est->tiros = 30;
-    est->inimigos_inativos = 20;
-    est->num_ataques = POSICOES_ATAQUE;
-    est->intervalo = 2.0;
-    est->arma = '0';
-    inicializa_ataques(est);
+    est->numero_onda = 1;
     inicializa_escudos(est);
-    crono_inicia(&est->ultimo_movimento);
+    inicia_onda(est);
 }
 
 bool ha_ataque_ativo(estado_t *est)
@@ -111,12 +166,13 @@ char lechar()
 
 void proxima_arma(estado_t *est)
 {
-    char sequencia[] = "0123456789n";
+    char *sequencia = est->noturno ? "02468n" : "0123456789n";
+    int tamanho = est->noturno ? 6 : 11;
     int i = 0;
     while (sequencia[i] != est->arma) {
         i++;
     }
-    i = (i + 1) % 11;
+    i = (i + 1) % tamanho;
     est->arma = sequencia[i];
 }
 
@@ -141,8 +197,17 @@ void atira_no_alvo(estado_t *est, int i)
         return;
     }
     int pontos_base = est->num_ataques - i;
+    int multiplicador;
+    if (est->arma == 'n') {
+        multiplicador = 2;
+    } else {
+        multiplicador = 1;
+    }
+    if (est->noturno) {
+        multiplicador *= 2;
+    }
     est->ataques[i] = ' ';
-    est->pontos += (est->arma == 'n') ? pontos_base * 2 : pontos_base;
+    est->pontos += pontos_base * multiplicador;
 }
 
 void atira(estado_t *est)
@@ -157,16 +222,23 @@ void atira(estado_t *est)
     }
 }
 
-void processa_teclado(estado_t *est)
+void proxima_arma(estado_t *est)
 {
-    char c = lechar();
-    if (c == 27) {
-        est->terminou_jogo = true;
-    } else if (c == '\t') {
-        proxima_arma(est);
-    } else if (c == '\r' || c == '\n') {
-        atira(est);
+    char *sequencia;
+    int tamanho;
+    if (est->noturno) {
+        sequencia = "02468n";
+        tamanho = 6;
+    } else {
+        sequencia = "0123456789n";
+        tamanho = 11;
     }
+    int i = 0;
+    while (sequencia[i] != est->arma) {
+        i++;
+    }
+    i = (i + 1) % tamanho;
+    est->arma = sequencia[i];
 }
 
 bool deve_mover(estado_t *est)
@@ -243,6 +315,10 @@ void desenha_ataques(estado_t *est)
 
 void apresenta(estado_t *est)
 {
+    if (est->noturno) {
+        printf(" %d   \r", est->pontos);
+        return;
+    }
     printf(" %d %d %c", est->pontos, est->tiros, est->arma);
     desenha_escudos(est);
     desenha_ataques(est);
@@ -281,6 +357,12 @@ void espera_reiniciar(estado_t *est)
     } while (c != 'r' && c != 'R');
 }
 
+void reinicia_onda(estado_t *est)
+{
+    est->numero_onda++;
+    inicia_onda(est);
+}
+
 void joga_partida(estado_t *est)
 {
     while (!est->terminou_jogo) {
@@ -288,6 +370,9 @@ void joga_partida(estado_t *est)
         if (!est->terminou_jogo) {
             aplica_bonus_fim_onda(est);
             espera_reiniciar(est);
+            if (!est->terminou_jogo) {
+                reinicia_onda(est);
+            }
         }
     }
 }
@@ -301,5 +386,5 @@ int main()
     while (!estado.terminou_jogo) {
         joga_partida(&estado);
     }
-   desinicializa_tela();
+    desinicializa_tela();
 }
