@@ -181,7 +181,7 @@ char lechar()
     return 0;
 }
 
-//
+//traduz o símbolo mostrado na tela para o nome do som
 char *nome_som(char simbolo)
 {
     static char digito[2];
@@ -199,7 +199,7 @@ char *nome_som(char simbolo)
     return digito;
 }
 
-//
+//monta e executa o comando aplay para tocar o som de nome dado
 void toca_som(char *nome)
 {
     char comando[48];
@@ -280,7 +280,7 @@ void atira(estado_t *est)
     }
 }
 
-//
+// converte a posição combinada no símbolo que está ali
 char simbolo_sonar(estado_t *est, int posicao)
 {
     if (posicao < NUM_ESCUDOS) {
@@ -290,6 +290,7 @@ char simbolo_sonar(estado_t *est, int posicao)
     return est->ataques[indice_ataque];
 }
 
+// monta a parte do comando aplay referente a um som e acrescenta
 void acrescenta_som(char *comando, char simbolo)
 {
     char *nome = nome_som(simbolo);
@@ -298,6 +299,7 @@ void acrescenta_som(char *comando, char simbolo)
     strcat(comando, ".3.wav ");
 }
 
+// aciona o sonar, tocando o som de cada posição (escudos e ataques)
 void aciona_sonar(estado_t *est)
 {
     char comando[250] = "aplay -q ";
@@ -310,6 +312,7 @@ void aciona_sonar(estado_t *est)
     system(comando);
 }
 
+// lê uma tecla e executa o comando correspondente
 void processa_teclado(estado_t *est)
 {
     char c = lechar();
@@ -324,6 +327,7 @@ void processa_teclado(estado_t *est)
     }
 }
 
+// verifica se já passou tempo suficiente para o próximo movimento
 bool deve_mover(estado_t *est)
 {
     if (crono_parcial(&est->ultimo_movimento) < est->intervalo) {
@@ -333,6 +337,7 @@ bool deve_mover(estado_t *est)
     return true;
 }
 
+//destrói o escudo mais próximo, ou termina o jogo se não houver
 void trata_colisao(estado_t *est)
 {
     for (int i = NUM_ESCUDOS - 1; i >= 0; i--) {
@@ -344,6 +349,7 @@ void trata_colisao(estado_t *est)
     est->terminou_jogo = true;
 }
 
+//move todos os ataques uma posição para a esquerda, tratando colisão
 void move_ataques(estado_t *est)
 {
     char saiu = est->ataques[0];
@@ -356,6 +362,7 @@ void move_ataques(estado_t *est)
     }
 }
 
+//sorteia tipo de ataque, entre os dígitos e N
 char sorteia_tipo_ataque()
 {
     int x = rand() % 11;
@@ -365,6 +372,7 @@ char sorteia_tipo_ataque()
     return x + '0';
 }
 
+//coloca um novo ataque na última posição, se ainda houver inativos
 void nasce_ataque(estado_t *est)
 {
     est->inimigos_inativos--;
@@ -373,6 +381,7 @@ void nasce_ataque(estado_t *est)
     toca_som(nome_som(tipo));
 }
 
+//processa a passagem do tempo e move os ataques e sorteia novos
 void processa_tempo(estado_t *est)
 {
     if (!deve_mover(est)) {
@@ -384,6 +393,7 @@ void processa_tempo(estado_t *est)
     }
 }
 
+// desenha os 3 escudos na tela
 void desenha_escudos(estado_t *est)
 {
     for (int i = 0; i < NUM_ESCUDOS; i++) {
@@ -391,6 +401,7 @@ void desenha_escudos(estado_t *est)
     }
 }
 
+// desenha os ataques na tela
 void desenha_ataques(estado_t *est)
 {
     for (int i = 0; i < est->num_ataques; i++) {
@@ -398,6 +409,7 @@ void desenha_ataques(estado_t *est)
     }
 }
 
+// desenha o estado atual do jogo na tela
 void apresenta(estado_t *est)
 {
     if (est->noturno) {
@@ -410,6 +422,7 @@ void apresenta(estado_t *est)
     printf("   \r");
 }
 
+//executa uma onda até que ela termine
 void joga_onda(estado_t *est)
 {
     while (!onda_terminou(est)) {
@@ -419,6 +432,7 @@ void joga_onda(estado_t *est)
     }
 }
 
+// aplica o bônus de pontos do fim de onda (tiros e escudos restantes)
 void aplica_bonus_fim_onda(estado_t *est)
 {
     est->pontos += est->tiros * 2;
@@ -429,6 +443,7 @@ void aplica_bonus_fim_onda(estado_t *est)
     }
 }
 
+//monta e toca, em sequência, uma lista de sons dada
 void toca_sequencia(char *nomes[], int quantidade)
 {
     char comando[100] = "aplay -q ";
@@ -441,17 +456,20 @@ void toca_sequencia(char *nomes[], int quantidade)
     system(comando);
 }
 
+// toca a sequência de sons do fim de uma onda
 void toca_som_fim_onda()
 {
     char *sons[] = {"12", "11", "12"};
     toca_sequencia(sons, 3);
 }
 
+//toca som do fim da partida, cogumelo do mario :)
 void toca_som_fim_partida()
 {
     system("aplay -q Sons/vitoria.wav &");
 }
 
+//mostra o resumo de fim de onda e espera o jogador digitar r
 void espera_reiniciar(estado_t *est)
 {
     toca_som_fim_onda();
@@ -466,12 +484,14 @@ void espera_reiniciar(estado_t *est)
     } while (c != 'r' && c != 'R');
 }
 
+// avança para a próxima onda
 void reinicia_onda(estado_t *est)
 {
     est->numero_onda++;
     inicia_onda(est);
 }
 
+// executa a partida, onda após onda, até o jogo terminar
 void joga_partida(estado_t *est)
 {
     while (!est->terminou_jogo) {
@@ -486,6 +506,7 @@ void joga_partida(estado_t *est)
     }
 }
 
+// lê as 3 maiores pontuações do arquivo ou zera se não tiver
 void le_pontuacoes(int pontuacoes[3])
 {
     for (int i = 0; i < 3; i++) {
@@ -502,6 +523,7 @@ void le_pontuacoes(int pontuacoes[3])
     fclose(arq);
 }
 
+// salva as 3 maiores pontuações no arquivo
 void salva_pontuacoes(int pontuacoes[3])
 {
     FILE *arq;
@@ -515,6 +537,7 @@ void salva_pontuacoes(int pontuacoes[3])
     fclose(arq);
 }
 
+// insere uma nova pontuação no lugar certo entre as 3 maiores
 void insere_pontuacao(int pontuacoes[3], int nova)
 {
     for (int i = 0; i < 3; i++) {
@@ -528,6 +551,7 @@ void insere_pontuacao(int pontuacoes[3], int nova)
     }
 }
 
+// atualiza o arquivo de recordes com a pontuação da partida atual
 void atualiza_recordes(estado_t *est)
 {
     int pontuacoes[3];
@@ -536,6 +560,7 @@ void atualiza_recordes(estado_t *est)
     salva_pontuacoes(pontuacoes);
 }
 
+// mostra o resumo final e pergunta se quer jogar de novo
 bool pergunta_jogar_de_novo(estado_t *est)
 {
     toca_som_fim_partida();
