@@ -2,17 +2,20 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 
 #define POSICOES_ATAQUE 10
 #define NUM_ESCUDOS 3
 
 typedef struct timespec crono;
 
+//inicializa um cronometro
 void crono_inicia(crono *c)
 {
     clock_gettime(CLOCK_MONOTONIC, c);
 }
 
+//retorna tempo
 double crono_parcial(crono *c)
 {
     crono agora;
@@ -37,6 +40,7 @@ typedef struct {
     char escudos[NUM_ESCUDOS];
 } estado_t;
 
+//modo cru, leitura de tecla sem enter
 void inicializa_tela()
 {
     if (system("stty raw opost -echo min 0 time 1") != 0) {
@@ -50,11 +54,13 @@ void inicializa_tela()
     }
 }
 
+//devolve o terminal ao modo normal
 void desinicializa_tela()
 {
     system("stty sane");
 }
 
+//limpa o vetor de ataques, marcando as posições como vazias
 void inicializa_ataques(estado_t *est)
 {
     for (int i = 0; i < POSICOES_ATAQUE; i++) {
@@ -62,6 +68,7 @@ void inicializa_ataques(estado_t *est)
     }
 }
 
+//coloca os escudos intactos
 void inicializa_escudos(estado_t *est)
 {
     for (int i = 0; i < NUM_ESCUDOS; i++) {
@@ -69,6 +76,7 @@ void inicializa_escudos(estado_t *est)
     }
 }
 
+// calcula o intervalo diurno, reduzindo 10% a cada onda
 double calcula_intervalo_diurno(int numero_onda)
 {
     double intervalo = 2.0;
@@ -78,6 +86,7 @@ double calcula_intervalo_diurno(int numero_onda)
     return intervalo;
 }
 
+//sorteia se a onda será noturna
 bool sorteia_noturno(int numero_onda)
 {
     int chances[] = {100, 80, 60, 40};
@@ -90,6 +99,7 @@ bool sorteia_noturno(int numero_onda)
     return (rand() % 100) >= chance_diurna;
 }
 
+//configura os valores da onda diurna
 void configura_onda_diurna(estado_t *est)
 {
     est->noturno = false;
@@ -98,6 +108,7 @@ void configura_onda_diurna(estado_t *est)
     est->arma = '0';
 }
 
+//configura os valores da onda noturna
 void configura_onda_noturna(estado_t *est)
 {
     est->noturno = true;
@@ -106,6 +117,7 @@ void configura_onda_noturna(estado_t *est)
     est->arma = '0';
 }
 
+//decide e aplica se a onda é diurna ou noturna
 void sorteia_tipo_onda(estado_t *est)
 {
     if (sorteia_noturno(est->numero_onda)) {
@@ -115,6 +127,7 @@ void sorteia_tipo_onda(estado_t *est)
     }
 }
 
+//prepara uma nova onda: tipo, intervalo, tiros, ataques e cronômetro
 void inicia_onda(estado_t *est)
 {
     sorteia_tipo_onda(est);
@@ -127,6 +140,7 @@ void inicia_onda(estado_t *est)
     crono_inicia(&est->ultimo_movimento);
 }
 
+//prepara o estado inicial de uma partida nova
 void inicializa_estado(estado_t *est)
 {
     est->terminou_jogo = false;
@@ -136,6 +150,7 @@ void inicializa_estado(estado_t *est)
     inicia_onda(est);
 }
 
+//verifica se existe algum ataque ativo no vetor de ataques
 bool ha_ataque_ativo(estado_t *est)
 {
     for (int i = 0; i < est->num_ataques; i++) {
@@ -146,6 +161,7 @@ bool ha_ataque_ativo(estado_t *est)
     return false;
 }
 
+//diz se a onda atual terminou, fim de jogo ou sem ataque
 bool onda_terminou(estado_t *est)
 {
     if (est->terminou_jogo) {
@@ -154,6 +170,7 @@ bool onda_terminou(estado_t *est)
     return est->inimigos_inativos == 0 && !ha_ataque_ativo(est);
 }
 
+//lê um caracter do teclado, ou 0 se nada foi digitado
 char lechar()
 {
     fflush(stdout);
@@ -164,18 +181,54 @@ char lechar()
     return 0;
 }
 
+//
+char *nome_som(char simbolo)
+{
+    static char digito[2];
+    if (simbolo == ')') {
+        return "12";
+    }
+    if (simbolo == ' ') {
+        return "x";
+    }
+    if (simbolo == 'N' || simbolo == 'n') {
+        return "11";
+    }
+    digito[0] = simbolo;
+    digito[1] = '\0';
+    return digito;
+}
+
+//
+void toca_som(char *nome)
+{
+    char comando[48];
+    sprintf(comando, "aplay -q Sons/%s.3.wav &", nome);
+    system(comando);
+}
+
+//avança a arma
 void proxima_arma(estado_t *est)
 {
-    char *sequencia = est->noturno ? "02468n" : "0123456789n";
-    int tamanho = est->noturno ? 6 : 11;
+    char *sequencia;
+    int tamanho;
+    if (est->noturno) {
+        sequencia = "02468n";
+        tamanho = 6;
+    } else {
+        sequencia = "0123456789n";
+        tamanho = 11;
+    }
     int i = 0;
     while (sequencia[i] != est->arma) {
         i++;
     }
     i = (i + 1) % tamanho;
     est->arma = sequencia[i];
+    toca_som(nome_som(est->arma));
 }
 
+//acha o índice do ataque ativo mais próximo da base que bate com a arma
 int acha_alvo(estado_t *est)
 {
     for (int i = 0; i < est->num_ataques; i++) {
@@ -190,6 +243,7 @@ int acha_alvo(estado_t *est)
     return -1;
 }
 
+//destrói o ataque na posição i, somando pontos
 void atira_no_alvo(estado_t *est, int i)
 {
     if (est->arma == 'n' && est->ataques[i] == 'N') {
@@ -210,6 +264,7 @@ void atira_no_alvo(estado_t *est, int i)
     est->pontos += pontos_base * multiplicador;
 }
 
+//dispara um tiro, buscando um alvo válido
 void atira(estado_t *est)
 {
     if (est->tiros <= 0) {
@@ -219,26 +274,54 @@ void atira(estado_t *est)
     int i = acha_alvo(est);
     if (i != -1) {
         atira_no_alvo(est, i);
+        toca_som(nome_som(est->arma));
+    } else {
+        toca_som("x");
     }
 }
 
-void proxima_arma(estado_t *est)
+//
+char simbolo_sonar(estado_t *est, int posicao)
 {
-    char *sequencia;
-    int tamanho;
-    if (est->noturno) {
-        sequencia = "02468n";
-        tamanho = 6;
-    } else {
-        sequencia = "0123456789n";
-        tamanho = 11;
+    if (posicao < NUM_ESCUDOS) {
+        return est->escudos[posicao];
     }
-    int i = 0;
-    while (sequencia[i] != est->arma) {
-        i++;
+    int indice_ataque = posicao - NUM_ESCUDOS;
+    return est->ataques[indice_ataque];
+}
+
+void acrescenta_som(char *comando, char simbolo)
+{
+    char *nome = nome_som(simbolo);
+    strcat(comando, "Sons/");
+    strcat(comando, nome);
+    strcat(comando, ".3.wav ");
+}
+
+void aciona_sonar(estado_t *est)
+{
+    char comando[250] = "aplay -q ";
+    int total = NUM_ESCUDOS + est->num_ataques;
+    for (int i = 0; i < total; i++) {
+        char simbolo = simbolo_sonar(est, i);
+        acrescenta_som(comando, simbolo);
     }
-    i = (i + 1) % tamanho;
-    est->arma = sequencia[i];
+    strcat(comando, "&");
+    system(comando);
+}
+
+void processa_teclado(estado_t *est)
+{
+    char c = lechar();
+    if (c == 27) {
+        est->terminou_jogo = true;
+    } else if (c == '\t') {
+        proxima_arma(est);
+    } else if (c == '\r' || c == '\n') {
+        atira(est);
+    } else if (c == ' ') {
+        aciona_sonar(est);
+    }
 }
 
 bool deve_mover(estado_t *est)
@@ -285,7 +368,9 @@ char sorteia_tipo_ataque()
 void nasce_ataque(estado_t *est)
 {
     est->inimigos_inativos--;
-    est->ataques[est->num_ataques - 1] = sorteia_tipo_ataque();
+    char tipo = sorteia_tipo_ataque();
+    est->ataques[est->num_ataques - 1] = tipo;
+    toca_som(nome_som(tipo));
 }
 
 void processa_tempo(estado_t *est)
@@ -344,8 +429,32 @@ void aplica_bonus_fim_onda(estado_t *est)
     }
 }
 
+void toca_sequencia(char *nomes[], int quantidade)
+{
+    char comando[100] = "aplay -q ";
+    for (int i = 0; i < quantidade; i++) {
+        strcat(comando, "Sons/");
+        strcat(comando, nomes[i]);
+        strcat(comando, ".3.wav ");
+    }
+    strcat(comando, "&");
+    system(comando);
+}
+
+void toca_som_fim_onda()
+{
+    char *sons[] = {"12", "11", "12"};
+    toca_sequencia(sons, 3);
+}
+
+void toca_som_fim_partida()
+{
+    system("aplay -q Sons/vitoria.wav &");
+}
+
 void espera_reiniciar(estado_t *est)
 {
+    toca_som_fim_onda();
     printf("\nFim da onda! Pontuação atualizada. Aperte 'r' para continuar.\r\n");
     char c;
     do {
@@ -377,14 +486,79 @@ void joga_partida(estado_t *est)
     }
 }
 
+void le_pontuacoes(int pontuacoes[3])
+{
+    for (int i = 0; i < 3; i++) {
+        pontuacoes[i] = 0;
+    }
+    FILE *arq;
+    arq = fopen("pontuacoes.txt", "r");
+    if (arq == NULL) {
+        return;
+    }
+    for (int i = 0; i < 3; i++) {
+        fscanf(arq, "%d", &pontuacoes[i]);
+    }
+    fclose(arq);
+}
+
+void salva_pontuacoes(int pontuacoes[3])
+{
+    FILE *arq;
+    arq = fopen("pontuacoes.txt", "w");
+    if (arq == NULL) {
+        return;
+    }
+    for (int i = 0; i < 3; i++) {
+        fprintf(arq, "%d\n", pontuacoes[i]);
+    }
+    fclose(arq);
+}
+
+void insere_pontuacao(int pontuacoes[3], int nova)
+{
+    for (int i = 0; i < 3; i++) {
+        if (nova > pontuacoes[i]) {
+            for (int j = 2; j > i; j--) {
+                pontuacoes[j] = pontuacoes[j - 1];
+            }
+            pontuacoes[i] = nova;
+            return;
+        }
+    }
+}
+
+void atualiza_recordes(estado_t *est)
+{
+    int pontuacoes[3];
+    le_pontuacoes(pontuacoes);
+    insere_pontuacao(pontuacoes, est->pontos);
+    salva_pontuacoes(pontuacoes);
+}
+
+bool pergunta_jogar_de_novo(estado_t *est)
+{
+    toca_som_fim_partida();
+    printf("\nFim de jogo! Pontuação final: %d\r\n", est->pontos);
+    printf("Jogar de novo? (s/n)\r\n");
+    char c;
+    do {
+        c = lechar();
+    } while (c != 's' && c != 'S' && c != 'n' && c != 'N');
+    return (c == 's' || c == 'S');
+}
+
 int main()
 {
     srand(time(NULL));
     estado_t estado;
     inicializa_tela();
-    inicializa_estado(&estado);
-    while (!estado.terminou_jogo) {
+    bool jogar_de_novo = true;
+    while (jogar_de_novo) {
+        inicializa_estado(&estado);
         joga_partida(&estado);
+        atualiza_recordes(&estado);
+        jogar_de_novo = pergunta_jogar_de_novo(&estado);
     }
     desinicializa_tela();
 }
