@@ -41,6 +41,7 @@ static void s_ok(Str_c s)
     assert(s->alloc >= s->nbytes);  
     assert(s->alloc >= MIN_ALLOC);   
     assert((s->alloc <= 3*s->nbytes) || (s->alloc == MIN_ALLOC));
+    assert ((s->alloc & (s->alloc - 1)) == 0);
   }
 }
 
@@ -51,9 +52,8 @@ static void s_ok(Str_c s)
 Str s_cria(char const *strC)
 {
   Str s = malloc(sizeof(*s));
-  assert(s != NULL);
-  //...
-  return s;
+
+   return s;
 }
 
 void s_destroi(Str s)
