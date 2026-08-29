@@ -26,6 +26,29 @@ struct str {
 
 // funções auxiliares {{{1
 
+static void s_zera(Str s)
+{
+  s->dados = NULL;
+  s->nbytes = 0;
+  s->alloc = 0;
+}
+
+static void s_aloca_copia(Str s, char const *strC, int nbytes)
+{
+  int alloc = MIN_ALLOC;
+  while (alloc < nbytes) {
+    alloc = 2*alloc;
+  }
+
+  s->dados = malloc(alloc);
+  assert(s->dados != NULL);
+
+  memcpy(s->dados, strC, nbytes);
+
+  s->nbytes = nbytes;
+  s->alloc = alloc;
+}
+
 // verifica se a string cad está de acordo com a especificação
 // aborta o programa se não tiver
 static void s_ok(Str_c s)
@@ -52,14 +75,32 @@ static void s_ok(Str_c s)
 Str s_cria(char const *strC)
 {
   Str s = malloc(sizeof(*s));
+  assert(s != NULL);
 
+  if (strC == NULL) {
+   s_zera(s);
+   s_ok(s);
    return s;
+}
+
+int nbytes = strlen(strC);
+int nchars = u8_conta_unichar_nos_bytes(nbytes, (byte*) strC);
+
+if (nchars == -1 || nbytes == 0) {
+  s_zera(s);
+}
+else{
+  s_aloca_copia(s,strC, nbytes);
+}
+
+s_ok(s);
+return s;
 }
 
 void s_destroi(Str s)
 {
   s_ok(s);
-  //...
+  free(s->dados);
   free(s);
 }
 
@@ -89,8 +130,8 @@ Str s_cria_de_arquivo(char *nome)
 int s_tam(Str_c s)
 {
   s_ok(s);
-  //...
-  return 0;
+  int nchars = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  return nchars;
 }
 
 char *s_strc(Str_c s)
