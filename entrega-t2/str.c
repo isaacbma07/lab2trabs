@@ -49,6 +49,64 @@ static void s_aloca_copia(Str s, char const *strC, int nbytes)
   s->alloc = alloc;
 }
 
+static int s_fixpos(int pos, int n)
+{
+  if (pos < 0) {
+    pos = n + pos + 1;
+  }
+  return pos;
+}
+
+static byte *s_byte_de(Str_c s, int pos)
+{
+  int n = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  pos = s_fixpos(pos, n);
+  return u8_avanca_unichar(s-> dados, pos);
+}
+
+static int s_conta_bytes(Str_c sb){
+  if (sb == NULL)
+  {
+   return 0;
+  }
+  return sb->nbytes;;
+}
+
+static void s_garante_espaco (Str s, int novo_byte)
+{
+  if(novo_byte == 0) {
+  free (s->dados);
+  s->dados = NULL;
+  s->alloc = 0;
+  return;
+  }
+
+  int alloc = MIN_ALLOC;
+  while (alloc < novo_byte){
+    alloc = 2*alloc;
+  }
+
+  if (alloc != s->alloc) {
+    s->dados = realloc(s->dados, alloc);
+    assert(s->dados != NULL);
+    s->alloc = alloc;
+  }
+
+}
+
+static void s_resolve_intervalo (Str_c s, int pos, int tam, int *offset_ini, int *offset_fim)
+{
+  int n = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  pos = s_fixpos(pos, n);
+  if (tam < 0)
+  {
+    tam = n - pos;
+  }
+  
+  *offset_ini = s_byte_de(s, pos) - s->dados;
+  *offset_fim = s_byte_de(s, pos + tam) - s->dados;
+} 
+
 // verifica se a string cad está de acordo com a especificação
 // aborta o programa se não tiver
 static void s_ok(Str_c s)
@@ -137,15 +195,34 @@ int s_tam(Str_c s)
 char *s_strc(Str_c s)
 {
   s_ok(s);
-  //...
-  return NULL;
+  
+  char *strC = malloc(s->nbytes + 1);
+  assert(strC != NULL);
+
+  memcpy(strC, s->dados, s->nbytes);
+
+  strC[s->nbytes] = '\0';
+  
+  return strC;
 }
 
 unichar s_ch(Str_c s, int pos)
 {
   s_ok(s);
-  //...
-  return UNI_INV;
+  
+  int n = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  pos = s_fixpos(pos, n);
+
+  if (pos < 0 || pos >= n) {
+    return UNI_INV;
+  }
+  
+  byte *ptr = u8_avanca_unichar(s->dados, pos);
+
+  unichar uni;
+  u8_unichar_nos_bytes(s->nbytes, ptr, &uni);
+  
+  return uni;
 }
 
 
@@ -205,8 +282,29 @@ int s_busca_s(Str_c s, int pos, Str_c buscada)
 void s_substitui(Str s, int pos, int tam, Str_c sb)
 {
   s_ok(s);
-  s_ok(sb);
-  //...
+  if (sb != NULL){
+   s_ok(sb);
+  }
+   
+  int offset_ini, offset_fim;
+  s_resolve_intervalo(s, pos, tam, &offset_ini, &offset_fim);
+
+  int bytes_sb = s_conta_bytes(sb);
+  int novo_bytes = s->nbytes - (offset_fim - offset_ini) + bytes_sb;
+
+  s_garante_espaco(s, novo_bytes);
+
+  byte *ini = s->dados + offset_ini;
+  byte *fim = s->dados + offset_fim;
+  int tam_cauda = s->nbytes - offset_fim;
+
+  memmove(ini + bytes_sb, fim, tam_cauda);
+  if (sb != NULL)
+  {
+    memcpy(ini, sb->dados, bytes_sb);
+  }
+
+  s->nbytes = novo_bytes;
 }
 
 void s_substring(Str s, Str_c sb, int pos, int tam)
