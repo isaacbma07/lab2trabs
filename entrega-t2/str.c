@@ -232,8 +232,13 @@ bool s_igual(Str_c s, Str_c sb)
 {
   s_ok(s);
   s_ok(sb);
-  //...
-  return false;
+
+  if (s->nbytes != sb->nbytes)
+  {
+    return false;
+  }
+  
+  return memcmp(s->dados, sb->dados, s->nbytes) == 0;
 }
 
 int s_busca_c(Str_c s, int pos, Str_c sb)
@@ -310,8 +315,23 @@ void s_substitui(Str s, int pos, int tam, Str_c sb)
 void s_substring(Str s, Str_c sb, int pos, int tam)
 {
   s_ok(s);
-  s_ok(sb);
-  //...
+  if (sb != NULL) {
+    s_ok(sb);
+  }
+
+  int ini = 0, fim = 0;
+  if (sb != NULL) {
+    s_resolve_intervalo(sb, pos, tam, &ini, &fim);
+  }
+  int nbytes = fim - ini;
+
+  free(s->dados);
+  if (nbytes == 0) {
+    s_zera(s);
+  }
+  else {
+    s_aloca_copia(s, (char *) sb->dados + ini, nbytes);
+  }
 }
 
 void s_copia(Str s, Str_c sb)
