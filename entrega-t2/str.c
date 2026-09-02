@@ -107,6 +107,28 @@ static void s_resolve_intervalo (Str_c s, int pos, int tam, int *offset_ini, int
   *offset_fim = s_byte_de(s, pos + tam) - s->dados;
 } 
 
+static bool s_char_em(unichar c, Str_c conjunto)
+{
+  int n = s_tam(conjunto);
+  for (int i = 0; i < n; i++) {
+   if (s_ch(conjunto, i) == c) {
+    return true;
+   }
+  }
+  return false;
+}
+
+static bool s_bate_aqui(Str_c s, int i, Str_c buscada)
+{
+  int nb = s_tam(buscada);
+  for (int j = 0; j < nb; j++) {
+    if (s_ch(s, i + j) != s_ch(buscada, j)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // verifica se a string cad está de acordo com a especificação
 // aborta o programa se não tiver
 static void s_ok(Str_c s)
@@ -139,20 +161,20 @@ Str s_cria(char const *strC)
    s_zera(s);
    s_ok(s);
    return s;
-}
+  }
 
-int nbytes = strlen(strC);
-int nchars = u8_conta_unichar_nos_bytes(nbytes, (byte*) strC);
+  int nbytes = strlen(strC);
+  int nchars = u8_conta_unichar_nos_bytes(nbytes, (byte*) strC);
 
-if (nchars == -1 || nbytes == 0) {
-  s_zera(s);
-}
-else{
-  s_aloca_copia(s,strC, nbytes);
-}
+  if (nchars == -1 || nbytes == 0) {
+    s_zera(s);
+  }
+  else{
+    s_aloca_copia(s,strC, nbytes);
+  }
 
-s_ok(s);
-return s;
+  s_ok(s);
+  return s;
 }
 
 void s_destroi(Str s)
@@ -245,7 +267,16 @@ int s_busca_c(Str_c s, int pos, Str_c sb)
 {
   s_ok(s);
   s_ok(sb);
-  //...
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos < 0) pos = 0;
+
+  for (int i = pos; i < n; i++) {
+    if (s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
   return -1;
 }
 
@@ -253,7 +284,16 @@ int s_busca_nc(Str_c s, int pos, Str_c sb)
 {
   s_ok(s);
   s_ok(sb);
-  //...
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos < 0) pos = 0;
+
+  for (int i = pos; i < n; i++) {
+    if (!s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
   return -1;
 }
 
@@ -261,7 +301,16 @@ int s_busca_rc(Str_c s, int pos, Str_c sb)
 {
   s_ok(s);
   s_ok(sb);
-  //...
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos > n) pos = n;
+
+  for (int i = pos - 1; i >= 0; i--) {
+    if (s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
   return -1;
 }
 
@@ -269,7 +318,16 @@ int s_busca_rnc(Str_c s, int pos, Str_c sb)
 {
   s_ok(s);
   s_ok(sb);
-  //...
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos > n) pos = n;
+
+  for (int i = pos - 1; i >= 0; i--) {
+    if (!s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
   return -1;
 }
 
@@ -277,7 +335,21 @@ int s_busca_s(Str_c s, int pos, Str_c buscada)
 {
   s_ok(s);
   s_ok(buscada);
-  //...
+
+  int n = s_tam(s);
+  int nb = s_tam(buscada);
+  pos = s_fixpos(pos, n);
+  if (pos < 0) pos = 0;
+
+  if (nb == 0) {
+    return pos;
+  }
+
+  for (int i = pos; i <= n - nb; i++) {
+    if (s_bate_aqui(s, i, buscada)) {
+      return i;
+    }
+  }
   return -1;
 }
 
