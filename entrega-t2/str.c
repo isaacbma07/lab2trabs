@@ -201,7 +201,26 @@ Str s_cria_cópia(Str_c s)
 Str s_cria_de_arquivo(char *nome)
 {
   Str s = s_cria("");
-  //...
+  FILE *arq = fopen(nome, "rb");
+  if (arq == NULL) {
+    return s;
+  }
+
+  fseek(arq, 0, SEEK_END);
+  long tam = ftell(arq);
+  fseek(arq, 0, SEEK_SET);
+
+  if (tam > 0) {
+    byte *buf = malloc(tam);
+    assert(buf != NULL);
+    long lidos = fread(buf, 1, tam, arq);
+    if (lidos > 0) {
+      s_aloca_copia(s, (char *) buf, lidos);
+    }
+    free(buf);
+  }
+  fclose(arq);
+  s_ok(s);
   return s;
 }
 
@@ -419,7 +438,14 @@ void s_insere(Str s, int pos, Str_c sb)
 void s_insere_c(Str s, int pos, unichar c)
 {
   s_ok(s);
-  //...
+  
+  byte bytes[5];
+  int n = u8_converte_pra_utf8(c, bytes);
+  bytes[n] = '\0';
+
+  Str temp = s_cria((char *) bytes);
+  s_insere(s, pos, temp);
+  s_destroi(temp);
 }
 
 void s_anexa(Str s, Str_c sb)
@@ -441,21 +467,44 @@ void s_apara(Str s, Str_c sobras)
 {
   s_ok(s);
   s_ok(sobras);
-  //...
+  
+  int n = s_tam(s);
+  int fim = s_busca_rnc(s, n, sobras);
+
+  if (fim == -1) {
+    s_remove(s, 0, -1);
+    return;
+  }
+
+  s_remove(s, fim + 1, -1);
+  int ini = s_busca_nc(s, 0,sobras);
+  s_remove(s, 0, ini);
 }
 
 // operações de E/S {{{1
 
 void s_imprime(Str_c s)
 {
-  s_ok(s);
-  //...
+ s_ok(s);
+  if (s->nbytes > 0) {
+    fwrite(s->dados, 1, s->nbytes, stdout);
+  }
 }
 
 void s_grava_arquivo(Str_c s, char *nome)
 {
   s_ok(s);
-  //...
+
+  FILE *arq = fopen(nome, "wb");
+  if (arq == NULL) {
+    return;
+  }
+
+  if (s->nbytes > 0) {
+    fwrite(s->dados, 1, s->nbytes, arq);
+  }
+
+  fclose(arq);
 }
 
 
