@@ -20,16 +20,12 @@ Lista l_cria()
 {
   Lista l = malloc(sizeof(*l));
   assert(l != NULL);
-
   nó *sent = malloc(sizeof(nó));
   assert(sent != NULL);
-
   sent->prox = sent;
   sent->ant = sent;
-
   l->sentinela = sent;
   l->tam = 0;
-
   return l;
 }
 
@@ -60,7 +56,6 @@ static void insere_antes(nó *x, dado_t d)
   nó *novo = malloc(sizeof(nó));
   assert(novo != NULL);
   novo->dado = d;
-
   novo->prox = x;
   novo->ant = x->ant;
   x->ant->prox = novo;
@@ -118,12 +113,9 @@ dado_t l_dado_fim(Lista l)
 static dado_t remove_no(nó *vitima)
 {
   dado_t d = vitima->dado;
-
   vitima->ant->prox = vitima->prox;
   vitima->prox->ant = vitima->ant;
-
   free(vitima);
-
   return d;
 }
 
@@ -143,4 +135,61 @@ dado_t l_remove_inicio(Lista l)
 dado_t l_remove_fim(Lista l)
 {
   return l_remove_pos(l, l_tam(l) - 1);
+}
+
+dado_t l_primeiro(Lista l)
+{
+  return l_dado_inicio(l);
+}
+
+void l_insere(Lista l, dado_t d)
+{
+  l_insere_fim(l, d);
+}
+
+dado_t l_remove(Lista l)
+{
+  return l_remove_inicio(l);
+}
+
+dado_t l_topo(Lista l)
+{
+  return l_dado_fim(l);
+}
+
+void l_empilha(Lista l, dado_t d)
+{
+  l_insere_fim(l, d);
+}
+
+dado_t l_desempilha(Lista l)
+{
+  return l_remove_fim(l);
+}
+
+void l_imprime(Lista l)
+{
+  nó *atual = l->sentinela->prox;
+  while (atual != l->sentinela) {
+   s_imprime(atual->dado);
+   atual = atual->prox;
+  }
+}
+
+Lista l_cria_separando(Str s, Str sep)
+{
+  Lista l = l_cria();
+  int n = s_tam(s);
+  int pos = s_busca_nc(s, 0, sep);  
+  while (pos != -1 && pos < n) {
+    int fim = s_busca_c(s, pos, sep);
+    if (fim == -1) {
+      fim = n;
+    }
+    Str pedaco = s_cria_substring(s, pos, fim - pos);
+    l_insere_fim(l, pedaco);
+    pos = s_busca_nc(s, fim, sep);
+  }
+
+  return l;
 }
