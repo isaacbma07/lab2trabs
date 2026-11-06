@@ -1,0 +1,540 @@
+// includes, constantes e declarações {{{1
+#include "str.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
+#define MIN_ALLOC 8    // alocação mínima
+
+struct str {
+  byte *dados;
+  int nbytes;
+  int alloc;
+};
+
+// A memória para conter os bytes de uma string deve ser alocada e/ou
+//   realocada conforme a necessidade, cuidando para que a quantidade
+//   de memória alocada seja sempre:
+//   - nula (não alocada) se a string for vazia, ou
+//   - não inferior ao necessário para armazenar os bytes da codificação utf8;
+//   - não inferior à alocação mínima;
+//   - não superior ao triplo do número de bytes necessários
+//     (exceto quando for o mínimo);
+//   - uma potência de 2.
+
+// funções auxiliares {{{1
+
+static void s_zera(Str s)
+{
+  s->dados = NULL;
+  s->nbytes = 0;
+  s->alloc = 0;
+}
+
+static void s_aloca_copia(Str s, char const *strC, int nbytes)
+{
+  int alloc = MIN_ALLOC;
+  while (alloc < nbytes) {
+    alloc = 2*alloc;
+  }
+
+  s->dados = malloc(alloc);
+  assert(s->dados != NULL);
+
+  memcpy(s->dados, strC, nbytes);
+
+  s->nbytes = nbytes;
+  s->alloc = alloc;
+}
+
+static int s_fixpos(int pos, int n)
+{
+  if (pos < 0) {
+    pos = n + pos + 1;
+  }
+  return pos;
+}
+
+static byte *s_byte_de(Str_c s, int pos)
+{
+  int n = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  pos = s_fixpos(pos, n);
+  return u8_avanca_unichar(s-> dados, pos);
+}
+
+static int s_conta_bytes(Str_c sb){
+  if (sb == NULL)
+  {
+   return 0;
+  }
+  return sb->nbytes;;
+}
+
+static void s_garante_espaco (Str s, int novo_byte)
+{
+  if(novo_byte == 0) {
+  free (s->dados);
+  s->dados = NULL;
+  s->alloc = 0;
+  return;
+  }
+
+  int alloc = MIN_ALLOC;
+  while (alloc < novo_byte){
+    alloc = 2*alloc;
+  }
+
+  if (alloc != s->alloc) {
+    s->dados = realloc(s->dados, alloc);
+    assert(s->dados != NULL);
+    s->alloc = alloc;
+  }
+
+}
+
+static void s_resolve_intervalo (Str_c s, int pos, int tam, int *offset_ini, int *offset_fim)
+{
+  int n = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  pos = s_fixpos(pos, n);
+  if (tam < 0)
+  {
+    tam = n - pos;
+  }
+  
+  *offset_ini = s_byte_de(s, pos) - s->dados;
+  *offset_fim = s_byte_de(s, pos + tam) - s->dados;
+} 
+
+static bool s_char_em(unichar c, Str_c conjunto)
+{
+  int n = s_tam(conjunto);
+  for (int i = 0; i < n; i++) {
+   if (s_ch(conjunto, i) == c) {
+    return true;
+   }
+  }
+  return false;
+}
+
+static bool s_bate_aqui(Str_c s, int i, Str_c buscada)
+{
+  int nb = s_tam(buscada);
+  for (int j = 0; j < nb; j++) {
+    if (s_ch(s, i + j) != s_ch(buscada, j)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// verifica se a string cad está de acordo com a especificação
+// aborta o programa se não tiver
+static void s_ok(Str_c s)
+{ 
+  assert(s != NULL);
+  
+  if (s->nbytes == 0) {
+    assert(s->dados == NULL);
+    assert(s->alloc == 0);
+  }
+  else {
+    assert(s->dados != NULL);
+    assert(s->alloc >= s->nbytes);  
+    assert(s->alloc >= MIN_ALLOC);   
+    assert((s->alloc <= 3*s->nbytes) || (s->alloc == MIN_ALLOC));
+    assert ((s->alloc & (s->alloc - 1)) == 0);
+  }
+}
+
+//...
+
+// operações de criação e destruição {{{1
+
+Str s_cria(char const *strC)
+{
+  Str s = malloc(sizeof(*s));
+  assert(s != NULL);
+
+  if (strC == NULL) {
+   s_zera(s);
+   s_ok(s);
+   return s;
+  }
+
+  int nbytes = strlen(strC);
+  int nchars = u8_conta_unichar_nos_bytes(nbytes, (byte*) strC);
+  if (nchars == -1 || nbytes == 0) {
+    s_zera(s);
+  }
+  else{
+    s_aloca_copia(s,strC, nbytes);
+  }
+
+  s_ok(s);
+  return s;
+}
+
+Str s_cria_unindo(Lista l, Str sep)
+{
+  Str resultado = s_cria("");
+  int n = l_tam(l);
+  for (int i = 0; i < n; i++) {
+    if (i > 0) {
+      s_anexa(resultado, sep);
+    }
+    s_anexa(resultado, l_dado_pos(l, i));
+  }
+
+  return resultado;
+}
+
+Str s_cria_número(double num)
+{
+  char buf[64];
+  sprintf(buf, "%g", num);
+  return s_cria(buf);
+}
+
+void s_destroi(Str s)
+{
+  s_ok(s);
+  free(s->dados);
+  free(s);
+}
+
+Str s_cria_substring(Str_c s, int pos, int tam)
+{
+   Str nova = s_cria("");
+   s_substring(nova, s, pos, tam);
+   return nova;
+}
+
+Str s_cria_cópia(Str_c s)
+{
+   return s_cria_substring(s, 0, -1);
+}
+
+// Retorna uma nova string com o conteúdo do arquivo chamado nome.
+// Retorna uma string vazia em caso de erro.
+Str s_cria_de_arquivo(char *nome)
+{
+  Str s = s_cria("");
+  FILE *arq = fopen(nome, "rb");
+  if (arq == NULL) {
+    return s;
+  }
+
+  fseek(arq, 0, SEEK_END);
+  long tam = ftell(arq);
+  fseek(arq, 0, SEEK_SET);
+
+  if (tam > 0) {
+    byte *buf = malloc(tam);
+    assert(buf != NULL);
+    long lidos = fread(buf, 1, tam, arq);
+    if (lidos > 0) {
+      s_aloca_copia(s, (char *) buf, lidos);
+    }
+    free(buf);
+  }
+  fclose(arq);
+  s_ok(s);
+  return s;
+}
+
+// operações de acesso {{{1
+
+int s_tam(Str_c s)
+{
+  s_ok(s);
+  int nchars = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  return nchars;
+}
+
+char *s_strc(Str_c s)
+{
+  s_ok(s);
+  
+  char *strC = malloc(s->nbytes + 1);
+  assert(strC != NULL);
+
+  memcpy(strC, s->dados, s->nbytes);
+
+  strC[s->nbytes] = '\0';
+  
+  return strC;
+}
+
+unichar s_ch(Str_c s, int pos)
+{
+  s_ok(s);
+  
+  int n = u8_conta_unichar_nos_bytes(s->nbytes, s->dados);
+  pos = s_fixpos(pos, n);
+  if (pos < 0 || pos >= n) {
+    return UNI_INV;
+  }
+  
+  byte *ptr = u8_avanca_unichar(s->dados, pos);
+  unichar uni;
+  u8_unichar_nos_bytes(s->nbytes, ptr, &uni);
+  
+  return uni;
+}
+
+double s_número(Str_c s)
+{
+  s_ok(s);
+  char *num = s_strc(s);
+  double s_num;
+  sscanf(num, "%lf", &s_num);
+  free(num);
+  return s_num;
+}
+
+
+// operações de busca e comparação {{{1
+
+bool s_igual(Str_c s, Str_c sb)
+{
+  s_ok(s);
+  s_ok(sb);
+
+  if (s->nbytes != sb->nbytes)
+  {
+    return false;
+  }
+  
+  return memcmp(s->dados, sb->dados, s->nbytes) == 0;
+}
+
+int s_busca_c(Str_c s, int pos, Str_c sb)
+{
+  s_ok(s);
+  s_ok(sb);
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos < 0) pos = 0;
+
+  for (int i = pos; i < n; i++) {
+    if (s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int s_busca_nc(Str_c s, int pos, Str_c sb)
+{
+  s_ok(s);
+  s_ok(sb);
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos < 0) pos = 0;
+
+  for (int i = pos; i < n; i++) {
+    if (!s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int s_busca_rc(Str_c s, int pos, Str_c sb)
+{
+  s_ok(s);
+  s_ok(sb);
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos > n) pos = n;
+
+  for (int i = pos - 1; i >= 0; i--) {
+    if (s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int s_busca_rnc(Str_c s, int pos, Str_c sb)
+{
+  s_ok(s);
+  s_ok(sb);
+
+  int n = s_tam(s);
+  pos = s_fixpos(pos, n);
+  if (pos > n) pos = n;
+
+  for (int i = pos - 1; i >= 0; i--) {
+    if (!s_char_em(s_ch(s, i), sb)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int s_busca_s(Str_c s, int pos, Str_c buscada)
+{
+  s_ok(s);
+  s_ok(buscada);
+
+  int n = s_tam(s);
+  int nb = s_tam(buscada);
+  pos = s_fixpos(pos, n);
+  if (pos < 0) pos = 0;
+
+  if (nb == 0) {
+    return pos;
+  }
+
+  for (int i = pos; i <= n - nb; i++) {
+    if (s_bate_aqui(s, i, buscada)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+
+// operações de alteração {{{1
+
+void s_substitui(Str s, int pos, int tam, Str_c sb)
+{
+  s_ok(s);
+  if (sb != NULL){
+   s_ok(sb);
+  }
+   
+  int offset_ini, offset_fim;
+  s_resolve_intervalo(s, pos, tam, &offset_ini, &offset_fim);
+
+  int bytes_sb = s_conta_bytes(sb);
+  int novo_bytes = s->nbytes - (offset_fim - offset_ini) + bytes_sb;
+
+  s_garante_espaco(s, novo_bytes);
+
+  byte *ini = s->dados + offset_ini;
+  byte *fim = s->dados + offset_fim;
+  int tam_cauda = s->nbytes - offset_fim;
+
+  memmove(ini + bytes_sb, fim, tam_cauda);
+  if (sb != NULL)
+  {
+    memcpy(ini, sb->dados, bytes_sb);
+  }
+
+  s->nbytes = novo_bytes;
+}
+
+void s_substring(Str s, Str_c sb, int pos, int tam)
+{
+  s_ok(s);
+  if (sb != NULL) {
+    s_ok(sb);
+  }
+
+  int ini = 0, fim = 0;
+  if (sb != NULL) {
+    s_resolve_intervalo(sb, pos, tam, &ini, &fim);
+  }
+  int nbytes = fim - ini;
+
+  free(s->dados);
+  if (nbytes == 0) {
+    s_zera(s);
+  }
+  else {
+    s_aloca_copia(s, (char *) sb->dados + ini, nbytes);
+  }
+}
+
+void s_copia(Str s, Str_c sb)
+{
+  s_substring(s, sb, 0, -1);
+}
+
+void s_insere(Str s, int pos, Str_c sb)
+{
+  s_substitui(s, pos, 0, sb);
+}
+
+void s_insere_c(Str s, int pos, unichar c)
+{
+  s_ok(s);
+  
+  byte bytes[5];
+  int n = u8_converte_pra_utf8(c, bytes);
+  bytes[n] = '\0';
+
+  Str temp = s_cria((char *) bytes);
+  s_insere(s, pos, temp);
+  s_destroi(temp);
+}
+
+void s_anexa(Str s, Str_c sb)
+{
+  s_substitui(s, -1, 0, sb);
+}
+
+void s_anexa_c(Str s, unichar c)
+{
+  s_insere_c(s, -1, c);
+}
+
+void s_remove(Str s, int pos, int tam)
+{
+  s_substitui(s, pos, tam, NULL);
+}
+
+void s_apara(Str s, Str_c sobras)
+{
+  s_ok(s);
+  s_ok(sobras);
+  
+  int n = s_tam(s);
+  int fim = s_busca_rnc(s, n, sobras);
+
+  if (fim == -1) {
+    s_remove(s, 0, -1);
+    return;
+  }
+
+  s_remove(s, fim + 1, -1);
+  int ini = s_busca_nc(s, 0,sobras);
+  s_remove(s, 0, ini);
+}
+
+// operações de E/S {{{1
+
+void s_imprime(Str_c s)
+{
+ s_ok(s);
+  if (s->nbytes > 0) {
+    fwrite(s->dados, 1, s->nbytes, stdout);
+  }
+}
+
+void s_grava_arquivo(Str_c s, char *nome)
+{
+  s_ok(s);
+
+  FILE *arq = fopen(nome, "wb");
+  if (arq == NULL) {
+    return;
+  }
+
+  if (s->nbytes > 0) {
+    fwrite(s->dados, 1, s->nbytes, arq);
+  }
+
+  fclose(arq);
+}
+
+
+// vim: foldmethod=marker shiftwidth=2
+
