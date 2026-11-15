@@ -65,3 +65,68 @@ void f_insere(Fila self, void *pdado)
   x->ant->prox = novo;
   x->ant = novo;
 }
+
+void f_remove(Fila self, void *pdado)
+{
+  assert(!f_tá_vazia(self));
+  nó *vítima = self->sentinela->prox;
+  if (pdado != NULL) {
+    memcpy(pdado, vítima->dado, self->tam_do_dado);
+  }
+  if (self->proximo == vítima) {
+    if (self->direcao == 1) {
+      self->proximo = vítima->prox;
+    }
+    else {
+      self->proximo = vítima->ant;
+    }
+  }
+  vítima->ant->prox = vítima->prox;
+  vítima->prox->ant = vítima->ant;
+  free(vítima->dado);
+  free(vítima);
+}
+
+void f_inicia_percurso(Fila self, int pos_inicial)
+{
+  nó *n = self->sentinela;
+
+  if (pos_inicial >= 0) {
+    self->direcao = 1;
+    for (int i = 0; i <= pos_inicial; i++) {
+      n = n->prox;
+      if (n == self->sentinela) {
+        break;
+      }
+    }
+  }
+  else {
+    self->direcao = -1;
+    for (int i = 0; i > pos_inicial; i--) {
+      n = n->ant;
+      if (n == self->sentinela) {
+        break;
+      }
+    }
+  }
+
+  self->proximo = n;
+}
+
+bool f_próximo(Fila self, void *pdado)
+{
+  if (self->proximo == self->sentinela) {
+    return false;
+  }
+  if (pdado != NULL) {
+    memcpy(pdado, self->proximo->dado, self->tam_do_dado);
+  }
+  if (self->direcao == 1) {
+    self->proximo = self->proximo->prox;
+  }
+  else {
+    self->proximo = self->proximo->ant;
+  }
+
+  return true;
+}
