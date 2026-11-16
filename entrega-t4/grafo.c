@@ -121,3 +121,27 @@ void g_destrói(Grafo self)
   free(self->arestas);
   free(self);
 }
+
+static void diminui_matriz(Grafo self, int nó)
+{
+  int n = self->n;
+  int novo_n = n - 1;
+  void **nova = NULL;
+
+  if (novo_n > 0) {
+    nova = malloc(novo_n * novo_n * sizeof(void *));
+    assert(nova != NULL);
+
+    for (int i = 0; i < novo_n; i++) {
+      for (int j = 0; j < novo_n; j++) {
+        int o = (i < nó) ? i : i + 1;
+        int d = (j < nó) ? j : j + 1;
+
+        nova[i * novo_n + j] = self->arestas[o * n + d];
+      }
+    }
+  }
+
+  free(self->arestas);
+  self->arestas = nova;
+}
