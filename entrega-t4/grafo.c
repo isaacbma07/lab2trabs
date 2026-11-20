@@ -223,18 +223,80 @@ void *g_próxima_aresta(Grafo self, int *p_nó_vizinho)
   return NULL;
 }
 
+static int *calcula_graus_de_entrada(Grafo self)
+{
+  int *grau = calloc(self->n, sizeof(int));
+  assert(grau != NULL);
+
+  for (int nó = 0; nó < self->n; nó++) {
+    g_arestas_que_chegam(self, nó);
+
+    while (g_próxima_aresta(self, NULL) != NULL) {
+      grau[nó]++;
+    }
+  }
+
+  return grau;
+}
+
+static void libera_sucessores(Grafo self, int nó, int *grau, Fila pronto)
+{
+  g_arestas_que_partem(self, nó);
+  int destino;
+  while (g_próxima_aresta(self, &destino) != NULL) {
+    grau[destino]--;
+    if (grau[destino] == 0) {
+      f_insere(pronto, &destino);
+    }
+  }
+}
+
+static Fila ordena(Grafo self, int *p_qtd)
+{
+  Fila ordem = f_cria(sizeof(int));
+  Fila pronto = f_cria(sizeof(int));
+  *p_qtd = 0;
+
+  if (self->n > 0) {
+    int *grau = calcula_graus_de_entrada(self);
+    for (int i = 0; i < self->n; i++) {
+      if (grau[i] == 0) {
+        f_insere(pronto, &i);
+      }
+    }
+
+    int nó;
+    while (!f_tá_vazia(pronto)) {
+      f_remove(pronto, &nó);
+      f_insere(ordem, &nó);
+      (*p_qtd)++;
+      libera_sucessores(self, nó, grau, pronto);
+    }
+
+    free(grau);
+  }
+
+  f_destrói(pronto);
+  return ordem;
+}
+
 bool g_tem_ciclo(Grafo self)
 {
-  return false;
+  int qtd;
+  Fila ordem = ordena(self, &qtd);
+  f_destrói(ordem);
+  return qtd < self->n;
 }
 
 Fila g_ordem_topológica(Grafo self)
 {
-  Fila fila = f_cria(sizeof(int));
+  int qtd;
+  Fila ordem = ordena(self, &qtd);
 
-  for (int i = 0; i < self->n; i++) {
-    f_insere(fila, &i);
+  if (qtd < self->n) {
+    f_destrói(ordem);
+    ordem = f_cria(sizeof(int));
   }
 
-  return fila;
+  return ordem;
 }
